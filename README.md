@@ -1,2 +1,2 @@
 # jusa
-stock analyzer
+stock analyzer, for my wife :)
