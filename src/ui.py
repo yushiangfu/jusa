@@ -1,6 +1,7 @@
 import tkinter
 from tkinter import ttk
 from PIL import Image, ImageTk
+import stockfilter
  
 class App(tkinter.Frame):
     def __init__(self, parent):
@@ -26,14 +27,14 @@ class App(tkinter.Frame):
         f0 = ttk.Frame(self.tabs, padding = 10)
         f0.img = Image.open("res/target.png")
         f0.pimg = ImageTk.PhotoImage(f0.img)
-        self.fs.stocks = f0
+        self.fs.stocks_tab = f0
         self.init_single_or_specified_ui(f0, 'All', 'e.g. 1234,2345,3456')
 
         # tab for 'date'
         f1 = ttk.Frame(self.tabs, padding = 10);
         f1.img = Image.open("res/date.jpg")
         f1.pimg = ImageTk.PhotoImage(f1.img)
-        self.fs.date = f1
+        self.fs.date_tab = f1
         self.init_single_or_specified_ui(f1, 'Today', \
             'e.g. 2015/10/1 or 2015/10/1-2015/11/1')
 
@@ -41,7 +42,7 @@ class App(tkinter.Frame):
         f2 = ttk.Frame(self.tabs, padding = 10);
         f2.img = Image.open("res/filter.jpg")
         f2.pimg = ImageTk.PhotoImage(f2.img)
-        self.fs.filters = f2
+        self.fs.filters_tab = f2
         self.init_filters_ui(f2)
 
         self.tabs.add(f0, image=f0.pimg)
@@ -55,18 +56,30 @@ class App(tkinter.Frame):
         self.run.grid(row = 0, column = 1, sticky = 'N')
 
     def run_filters(self):
-        if self.fs.stocks.rvar.get() == 'All':
+        if self.fs.stocks_tab.rvar.get() == 'All':
             stocks = 'all'
         else:
-            stocks = self.fs.stocks.e1.get()
+            stocks = self.fs.stocks_tab.e1.get()
 
-        if self.fs.date.rvar.get() == 'Today':
+        if self.fs.date_tab.rvar.get() == 'Today':
             date = 'today'
         else:
-            date = self.fs.date.e1.get()
+            date = self.fs.date_tab.e1.get()
 
         print('stocks:', stocks)
         print('date:', date)
+        i = 0
+        for cond in self.fs.filters_tab.filters_param:
+            if int(cond[0].get()): # [1] for checkbutton
+                ft = self.fs.filters_tab.filters_table[i][0]
+                ft_params = [widget.get() for widget in cond[1:]]
+                stockfilter.process_filter(ft, stocks, date, ft_params) 
+            i += 1
+            #for widget in cond:
+                #print(widget.get())
+
+        
+
 
     def init_single_or_specified_ui(self, parent, single_name, \
             specified_hint):
@@ -122,29 +135,38 @@ class App(tkinter.Frame):
         interior.bind("<Configure>", configure_interior)
 
 
-        filters = [
-            ['c', '創', 'e', '日新高'], 
-            ['c', '最近', 'e', '年, 毛利率不曾低於', 'e', '%'], 
-            ['c', '毛利率連續', 'e', '年遞增'], 
-            ['c', '毛利率創歷史新高'], 
-            ['c', '連續', 'e', '年發放現金股利'], 
+        filters_table = [
+            [stockfilter.new_price_in_n_days, 'c', '創', 'e', '日新高'], 
+            [None, 'c', '最近', 'e', '年, 毛利率不曾低於', 'e', '%'], 
+            [None, 'c', '毛利率連續', 'e', '年遞增'], 
+            [None, 'c', '毛利率創歷史新高'], 
+            [None, 'c', '連續', 'e', '年發放現金股利'], 
             ]
         i = 0
-        for cond in filters:
+        parent.filters_table = filters_table
+        parent.filters_param = []
+        for cond in filters_table:
             f = tkinter.Frame(interior)
             f.grid(sticky = 'w')
             col= 0
-            for widget in cond:
+            widget_set = []
+            for widget in cond[1:]:
                 if widget == 'c':
-                    cb = tkinter.Checkbutton(f)
+                    var = tkinter.IntVar()
+                    cb = tkinter.Checkbutton(f, variable = var)
                     cb.grid(row = 0, column = col)
+                    widget_set.append(var)
                 elif widget == 'e':
-                    e = tkinter.Entry(f, width = 3)
+                    var = tkinter.StringVar()
+                    e = tkinter.Entry(f, width = 3, textvariable = var)
                     e.grid(row = 0, column = col)
+                    widget_set.append(e)
                 else:
                     l = tkinter.Label(f, text = widget, font = 'purisa 10')
                     l.grid(row = 0, column = col)
                 col += 1
+            parent.filters_param.append(widget_set)
+            i += 1
 
 
 
