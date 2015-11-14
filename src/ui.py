@@ -43,6 +43,7 @@ class App(tkinter.Frame):
         f2.img = Image.open("res/filter.jpg")
         f2.pimg = ImageTk.PhotoImage(f2.img)
         self.fs.filters_tab = f2
+        f1.pimg = ImageTk.PhotoImage(f1.img)
         self.init_filters_ui(f2)
 
         self.tabs.add(f0, image=f0.pimg)
@@ -66,8 +67,8 @@ class App(tkinter.Frame):
         else:
             date = self.fs.date_tab.e1.get()
 
-        print('stocks:', stocks)
-        print('date:', date)
+        #print('stocks:', stocks)
+        #print('date:', date)
         i = 0
         for cond in self.fs.filters_tab.filters_param:
             if int(cond[0].get()): # [1] for checkbutton
@@ -136,7 +137,7 @@ class App(tkinter.Frame):
 
 
         filters_table = [
-            [stockfilter.new_price_in_n_days, 'c', '創', 'e', '日新高'], 
+            [stockfilter.new_price_in_n_days, 'c', '創', 'e', '日新', 'e'], 
             [None, 'c', '最近', 'e', '年, 毛利率不曾低於', 'e', '%'], 
             [None, 'c', '毛利率連續', 'e', '年遞增'], 
             [None, 'c', '毛利率創歷史新高'], 
