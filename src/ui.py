@@ -58,7 +58,8 @@ class App(tkinter.Frame):
 
 
         self.filters_table = [
-            [stockfilter.new_price_in_n_days, 'c', '創', 'e', '日新', 'e'],
+            [stockfilter.new_price_in_n_days, 'c', '股價創', 'e', '日新', 'e'],
+            [stockfilter.new_revenue_in_n_months, 'c', '營收創', 'e', '月新', 'e'],
             [None, 'c', '最近', 'e', '年, 毛利率不曾低於', 'e', '%'],
             [None, 'c', '毛利率連續', 'e', '年遞增'],
             [None, 'c', '毛利率創歷史新高'],
@@ -190,18 +191,18 @@ class App(tkinter.Frame):
         else:
             date = self.filesetting.date_tab.e1.get()
 
-        #print('stocks:', stocks)
-        #print('date:', date)
         i = 0
+        filters = []
         for cond in self.filters_params:
             if int(cond[0].get()): # [1] for checkbutton
                 #filt = self.filesetting.filters_tab.filters_table[i][0]
                 filt = self.filters_table[i][0]
                 ft_params = [widget.get() for widget in cond[1:]]
-                stockfilter.process_filter(filt, stocks, date, ft_params)
+                filters.append([filt, ft_params])
             i += 1
             #for widget in cond:
                 #print(widget.get())
+        stockfilter.process_filter(stocks, date, filters)
 
 
 

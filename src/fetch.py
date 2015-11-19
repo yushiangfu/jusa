@@ -7,6 +7,7 @@ from dateutil import relativedelta
 import csv
 import os
 from os import path
+from bs4 import BeautifulSoup
 
 
 def update_index():
@@ -24,26 +25,6 @@ def update_index():
                 print('real update index', filename)
                 os.rename('/tmp/' + filename, 'data/index/' + filename)
 
-def fetch_data(stock, idate, addition, category, field=None):
-    """
-    call by filter to fetch data according to category
-    dispatch mission to coressponding fetch_xxx()
-    """
-
-    if '-' in idate: # period
-        [start, end] = idate.split('-')
-        start_dt = datetime.strptime(start, '%Y/%m/%d').date()
-        end_dt = datetime.strptime(end, '%Y/%m/%d').date()
-    else: # single day
-        if idate == 'today':
-            start_dt = date.today()
-        else:
-            start_dt = datetime.strptime(idate, '%Y/%m/%d').date()
-        end_dt = start_dt
-
-    # case: stock price
-    if category == 'stock price':
-        return fetch_price(stock, start_dt, end_dt, addition, field)
 
 def need_update_price(dt_iter, filename):
     """
@@ -71,6 +52,38 @@ def need_update_price(dt_iter, filename):
                 if idx_lines > stock_lines: # idx file data is more
                     return True
     return False
+
+def need_update_revenue(filename):
+    """
+    compare with index file so as not to update stock price everytime
+    """
+    if not os.path.exists(filename):
+        return True
+    file_dt = datetime.fromtimestamp(path.getmtime(filename)).date()
+    today_dt = date.today()
+    if file_dt < today_dt:
+        return True
+    return False
+
+def fetch_revenue(stock, months):
+    """
+    dispatched by fetch_data() to fetch revenue data within date from file
+    download from url first if necessary
+    """
+    filename = 'data/' + stock + '/revenue.txt'
+    if need_update_revenue(filename):
+        fetch_revenue_from_url(stock, filename)
+    
+    res = []
+    with open(filename, 'r') as revenue_f:
+        csvf = csv.DictReader(revenue_f, delimiter=',')
+        cnt = 0
+        for row in csvf:
+            res.append(row['營業收入'])
+            cnt += 1
+            if cnt >= months:
+                break
+    return res[::-1]
 
 def fetch_price(stock, start_dt, end_dt, addition, field=None):
     """
@@ -270,7 +283,7 @@ def fetch_price_from_url(stock, idate, filename):
     """
     fetch stock price of date from url, and save to filename
     """
-    print('update', stock, idate.year, idate.month)
+    print('update price', stock, idate.year, idate.month)
     if stock == 'index':
         url = ('http://www.twse.com.tw' +
                '/ch/trading/exchange/FMTQIK/FMTQIK2.php' +
@@ -291,6 +304,29 @@ def fetch_price_from_url(stock, idate, filename):
     except UnicodeDecodeError as inst:
         print(inst.args)
         print(stock, inst)
+
+def fetch_revenue_from_url(stock, filename):
+    print('update revenue', stock)
+    url = ('http://ps01.megatime.com.tw/asp/Basic/GetReportJs.asp?m=&table_name=html\Wsale\&StockID=%(stock)s') % {'stock': stock}
+    
+    # write file after decoding
+    with request.urlopen(url) as response, \
+            open(filename, 'w') as out_file:
+        soup = BeautifulSoup(response.read().decode('big5hkscs'), 'lxml')
+        table = soup.find('table', attrs = {'cellpadding':'1', 'width':'85%'})
+        if not table: # FIXME: is there better way to solve this?
+            return
+        rows = []
+        for row in table.find_all('tr'):
+            rows.append([val.text for val in row.find_all('td')])
+
+        with open(filename, 'w') as f:
+            writer = csv.writer(f)
+            writer.writerows(rows)
+            
+
+    
+    
 
 import filecmp
 def fetch_price_from_url_test(input_param, expect_url, expect_filename):
