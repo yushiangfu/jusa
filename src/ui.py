@@ -19,10 +19,6 @@ class App():
         self.filters_descs = [
             [stockfilter.new_price_in_n_days, 'c', '股價創', 'e', '日新', 'e'],
             [stockfilter.new_revenue_in_n_months, 'c', '營收創', 'e', '月新', 'e'],
-            [None, 'c', '最近', 'e', '年, 毛利率不曾低於', 'e', '%'],
-            [None, 'c', '毛利率連續', 'e', '年遞增'],
-            [None, 'c', '毛利率創歷史新高'],
-            [None, 'c', '連續', 'e', '年發放現金股利'],
             ]
         self.filters_vars = None
 
@@ -186,36 +182,19 @@ class App():
 
     def init_filters_ui(self):
         """ according filters_descs to init widgets of each filter """
-        def configure_interior(event):
-            """ callback for scrollbar """
-            _ = event
-            canvas.configure(scrollregion=canvas.bbox("all"))
-
-        # scrollbar
-        scrollbar = tkinter.Scrollbar(self.filters_tab, orient="vertical")
-        scrollbar.grid(row=0, column=1, sticky='ns') # use sticky to expand
-
-        # canvas
-        canvas = tkinter.Canvas(self.filters_tab, yscrollcommand=scrollbar.set)
-        canvas.grid(row=0, column=0)
-
-        # bind canvas with scrollbar
-        scrollbar.config(command=canvas.yview)
-
-        self.filters_tab.grid_columnconfigure(0, weight=1)
-
-        # interior frame
-        interior = tkinter.Frame(canvas)
-        # anchor can reset scrollbar to top
-        canvas.create_window(0, 0, window=interior, anchor='nw')
-        interior.bind("<Configure>", configure_interior)
-
+        # init scrollbar/text and bind them
+        scrollbar = ttk.Scrollbar(self.filters_tab, orient='vertical')
+        text = tkinter.Text(self.filters_tab, yscrollcommand=scrollbar.set, 
+                            bg=self.parent.cget('bg'), takefocus=0)
+        scrollbar.config(command=text.yview)
+        scrollbar.pack(side='right', fill='y')
+        text.pack()
 
         self.filters_vars = []
         for filt in self.filters_descs:
-            frm = tkinter.Frame(interior)
-            frm.grid(sticky='w')
-            col = 0
+            frm = tkinter.Frame(text)
+            text.window_create('end', window=frm)
+            text.insert('end', '\n')
             filter_vars = []
             for desc in filt[1:]: # manually avoid filter function
                 if desc == 'c':
@@ -228,8 +207,7 @@ class App():
                     filter_vars.append(widget)
                 else:
                     widget = tkinter.Label(frm, text=desc, font='purisa 10')
-                widget.grid(row=0, column=col)
-                col += 1
+                widget.pack(side='left')
             self.filters_vars.append(filter_vars)
 
 
