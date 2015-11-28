@@ -4,133 +4,140 @@ get params from ui directly
 """
 import fetch
 from datetime import datetime, date
-from dateutil import relativedelta
-import csv
+from tkinter import messagebox
+import pandas
 
-def process_filter(stocks, period, filters):
+
+def process_filters(stock, period, filters_params):
+    # FIXME: should run strict filter first(may save the following filter)
+    match = True
+    for filt_params in range(len(filters_params)):
+        filt = filters_params[filt_params][0]
+        params = filters_params[filt_params][1:]
+        if not filt(stock, period, params):
+            match = False
+            break
+
+    if match:
+        return stock
+    return False
+        
+
+def process_stocks(stocks, period, filters_params, show_msg_box=True):
     """
     deal with 'stock' paramter and bypass other params to specified filter
     """
-    fetch.update_index() # FIXME: move to suitable place if possible
+    # check params
+    if not stocks or not period or not filters_params:
+        title = 'Insufficient Input'
+        msg = ''
+        if not stocks:
+            msg += 'no stock(s)\n'
+        if not period:
+            msg += 'no date\n'
+        if not filters_params:
+            msg += 'no filter parameter(s)\n'
+        if show_msg_box:
+            messagebox.showerror(title, msg)
+        return -1 # 0 may be used as match number
 
-    if not (stocks and period):
-        # FIXME, replace to msg box
-        print('insufficient input of stocks/date/ft_params')
-
-
+    not_in_table = []
     if stocks == 'all':
-        # FIXME: if read from excel, fix here
-        with open('doc/stock-table.txt', 'r') as csvfile:
-            for line in iter(csvfile.readline, b''):
-                if not line: # empty line before EOF
-                    break
-                line = line.split()
-                for i in range(0, len(line), 2):
-                    if line[i][0].isdigit(): # to avoid '上市'
-                        if len(line[i]) <= 2: # incorrect cell format in excel
-                            line[i] = '00' + line[i]
-                        match = True
-                        for j in range(len(filters)):
-                            ift = filters[j][0]
-                            ft_params = filters[j][1]
-                            if not ift(line[i], period, ft_params):
-                                match = False
-                                break
-                        if match:
-                            print(line[i], 'match')
-
+        stock_list = fetch.stock_table.index
     else:
-        for j in range(len(filters)):
-            ift = filters[j][0]
-            ft_params = filters[j][1]
-            ift(stocks, period, ft_params)
+        stocks = stocks.split(',')
+        stock_list = [stock for stock in stocks if stock in fetch.stock_table.index]
+        not_in_table = [stock for stock in stocks if stock not in stock_list]
+
+    match = []
+    for stock in stock_list:
+        res = process_filters(stock, period, filters_params)
+        if res:
+            match.append(res)
+
+    if match and show_msg_box:
+        messagebox.showinfo('Match', match)
+    elif not match and show_msg_box:
+        messagebox.showinfo('No match', 'No match')
+    if not_in_table and show_msg_box:
+        messagebox.showwarning('Not in table', not_in_table)
+
+    return len(match)
 
 
-def new_revenue_in_n_months(stock, _, ft_params):
-    """
-    filter out revenue if it's new high/low in specified months
-    """
-    months = int(ft_params[0])
-    if months <= 0:
-        print('error, days can\'t be <= 0') # FIXME, replace to msg box
-        return
-    high_str = ft_params[1]
-    if high_str in ['high', 'hi', 'h', 'up', 'u', 'top', 't']:
-        high = 1
-    elif high_str in ['low', 'l', 'down', 'd', 'bottom', 'b']:
-        high = 0
+def is_high(param):
+    """ determine whether param is high or not """
+    if param in ['high', 'hi', 'h', 'up', 'u', 'top', 't']:
+        high = True
+    elif param in ['low', 'l', 'down', 'd', 'bottom', 'b']:
+        high = False
     else:
-        print('error, months can\'t be <= 0') # FIXME, replace to msg box
+        messagebox.showerror('error', 'invalid high/low')
 
-    try:
-        revenue_data_str = fetch.fetch_revenue(stock, months)
-        revenue_data = [float(i.replace(',', '')) for i in revenue_data_str]
-        if high:
-            res = [float('nan')] * (months - 1) + [revenue_data[i] > \
-                max(revenue_data[i-(months-1):i]) \
-                for i in range(months - 1, len(revenue_data))]
-        else:
-            res = [float('nan')] * (months - 1) + [revenue_data[i] < \
-                min(revenue_data[i-(months-1):i]) \
-                for i in range(months - 1, len(revenue_data))]
-
-        if True in res:
-            return True
-        else:
-            return False
-            
-
-    except ValueError:
-        print(stock, price_data_str, 'format error')
-
-    
+    return high
 
 
-def new_price_in_n_days(stock, idate, ft_params):
+def new_price_in_n_days(stock, period, params):
     """
     filter out price if it's new high/low in specified days
     """
-    days = int(ft_params[0])
+    # parse params
+    days = int(params[0])
     if days <= 0:
-        print('error, days can\'t be <= 0') # FIXME, replace to msg box
-        return
-    high_str = ft_params[1]
-    if high_str in ['high', 'hi', 'h', 'up', 'u', 'top', 't']:
-        high = 1
-    elif high_str in ['low', 'l', 'down', 'd', 'bottom', 'b']:
-        high = 0
+        messagebox.showerror('error', 'days can\'t be <= 0')
+        return -1
+    high = is_high(params[1])
+
+    # -1 for it's included
+    res = fetch.fetch_price(stock, period, days - 1)
+    if res[0] == False: # empty files for half of a year
+        return False
     else:
-        print('error, days can\'t be <= 0') # FIXME, replace to msg box
+        df = res[1]
+
+    # be compatible between twse/otc
+    if fetch.stock_table.loc[stock]['TWSE/OTC'] == '上櫃':
+        price_label = '收盤'
+    else:
+        price_label = '收盤價'
+    
+    if high:
+        res = pandas.stats.moments.rolling_max(df[price_label], days)
+    else:
+        res = pandas.stats.moments.rolling_min(df[price_label], days)
+    res = (res == df[price_label])
+
+    if True in list(res):
+        return True
+    else:   
+        return False
 
 
-    if '-' in idate: # period
-        [start, end] = idate.split('-')
-        start_dt = datetime.strptime(start, '%Y/%m/%d').date()
-        end_dt = datetime.strptime(end, '%Y/%m/%d').date()
-    else: # single day
-        if idate == 'today':
-            start_dt = date.today()
-        else:
-            start_dt = datetime.strptime(idate, '%Y/%m/%d').date()
-        end_dt = start_dt
+def new_revenue_in_n_months(stock, period, params):
+    """
+    filter out revenue if it's new high/low in specified months
+    """
+    months = int(params[0])
+    if months <= 0:
+        messagebox.showerror('error', 'months can\'t be <= 0')
+        return -1
+    high = is_high(params[1])
 
+    res = fetch.fetch_revenue(stock, period, months - 1)
+    if res[0] == False:
+        return False
+    else:
+        df = res[1]
 
-    try:
-        price_data_str = fetch.fetch_price(stock, start_dt, end_dt, days - 1, '收盤價') # 1 is included in date
-        price_data = [float(i.replace(',', '')) for i in price_data_str]
-        if high:
-            res = [float('nan')] * (days - 1) + [price_data[i] > \
-                max(price_data[i-(days-1):i]) \
-                for i in range(days - 1, len(price_data))]
-        else:
-            res = [float('nan')] * (days - 1) + [price_data[i] < \
-                min(price_data[i-(days-1):i]) \
-                for i in range(days - 1, len(price_data))]
+    if high:
+        res = pandas.stats.moments.rolling_max(df['營業收入'], months)
+    else:
+        res = pandas.stats.moments.rolling_min(df['營業收入'], months)
+    res = (res == df['營業收入'])
 
-        if True in res:
-            return True
-        else:   
-            return False
-    except ValueError:
-        print(stock, price_data_str, 'format error')
+    if True in list(res):
+        return True
+    else:
+        return False
+
 

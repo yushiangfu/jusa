@@ -184,7 +184,7 @@ class App():
         """ according filters_descs to init widgets of each filter """
         # init scrollbar/text and bind them
         scrollbar = ttk.Scrollbar(self.filters_tab, orient='vertical')
-        text = tkinter.Text(self.filters_tab, yscrollcommand=scrollbar.set, 
+        text = tkinter.Text(self.filters_tab, yscrollcommand=scrollbar.set,
                             bg=self.parent.cget('bg'), takefocus=0)
         scrollbar.config(command=text.yview)
         scrollbar.pack(side='right', fill='y')
@@ -230,7 +230,7 @@ class App():
                 filt = self.filters_descs[i][0]
                 filter_params = [var.get() for var in filter_vars[1:]]
                 filters_params.append([filt] + filter_params)
-        stockfilter.process_filters(stocks, date, filters_params)
+        stockfilter.process_stocks(stocks, date, filters_params)
 
 
 def main():
