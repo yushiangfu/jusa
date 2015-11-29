@@ -8,22 +8,27 @@ from tkinter import messagebox
 import pandas
 
 
-def process_filters(stock, period, filters_params):
+def process_filters(stock, period, filters_params, multi=False):
     # FIXME: should run strict filter first(may save the following filter)
     match = True
     for filt_params in range(len(filters_params)):
         filt = filters_params[filt_params][0]
         params = filters_params[filt_params][1:]
-        if not filt(stock, period, params):
+        res = filt(stock, period, params)
+        if multi:
+            break
+        if not res:# normal case
             match = False
             break
 
+    if multi:
+        return res # without any processing
     if match:
         return stock
     return False
         
 
-def process_stocks(stocks, period, filters_params, show_msg_box=True):
+def process_stocks(stocks, period, filters_params, show_msg_box=True, multi=False):
     """
     deal with 'stock' paramter and bypass other params to specified filter
     """
@@ -50,10 +55,18 @@ def process_stocks(stocks, period, filters_params, show_msg_box=True):
         not_in_table = [stock for stock in stocks if stock not in stock_list]
 
     match = []
+    df = []
     for stock in stock_list:
-        res = process_filters(stock, period, filters_params)
-        if res:
+        print(stock + '       ', end='\r')
+        res = process_filters(stock, period, filters_params, multi=multi)
+        if not multi and res:
             match.append(res)
+        elif multi:
+            if type(df) != pandas.core.frame.DataFrame:
+                df = res
+            else:
+                df += res
+                print(df, end='\r')
 
     if match and show_msg_box:
         messagebox.showinfo('Match', match)
@@ -62,7 +75,10 @@ def process_stocks(stocks, period, filters_params, show_msg_box=True):
     if not_in_table and show_msg_box:
         messagebox.showwarning('Not in table', not_in_table)
 
-    return len(match)
+    if not multi:
+        return len(match)
+    else:
+        return df # without any processing
 
 
 def is_high(param):
@@ -90,7 +106,7 @@ def new_price_in_n_days(stock, period, params):
 
     # -1 for it's included
     res = fetch.fetch_price(stock, period, days - 1)
-    if res[0] == False: # empty files for half of a year
+    if res[0] == False: # empty files for a long term
         return False
     else:
         df = res[1]
@@ -140,4 +156,55 @@ def new_revenue_in_n_months(stock, period, params):
     else:
         return False
 
+
+def new_price_in_n_days_multi(stock, period, params):
+    """
+    filter out price if it's new high/low in specified multiple windows
+    """
+    # parse params
+    windows = params[0]
+    windows.sort() # e.g. [20, 60, 120, 240]
+
+    # -1 for it's included
+    res = fetch.fetch_price('index', period, windows[-1] - 1) # just get data once, so get it big
+    if res[0] == False: # empty files for half of a year
+        return False
+    else:
+        idx_df = res[1]
+
+    # -1 for it's included
+    res = fetch.fetch_price(stock, period, windows[-1] - 1) # just get data once, so get it big
+    if res[0] == False: # empty files for half of a year
+        return False
+    else:
+        df = res[1]
+
+    # be compatible between twse/otc
+    if fetch.stock_table.loc[stock]['TWSE/OTC'] == '上櫃':
+        price_label = '收盤'
+    else:
+        price_label = '收盤價'
+
+    df = pandas.DataFrame(index=idx_df.index, data=df[price_label])
+    
+    period = fetch.str_to_dates(period)
+    if period[0] != [False]:
+        start_dt, end_dt = period
+    else:
+        return False
+
+    res_list = []
+    for win in windows:
+        for high_low in ['high', 'low']:
+            if high_low == 'high':
+                res = pandas.stats.moments.rolling_max(df[price_label], win, min_periods=1)
+            else:
+                res = pandas.stats.moments.rolling_min(df[price_label], win, min_periods=1)
+            df[str(win) + high_low] = res == df[price_label]
+
+    df = df.drop(price_label, 1)
+    df = df[str(start_dt) <= res.index]
+    df = df[df.index <= str(end_dt)]
+
+    return df.astype(int)
 

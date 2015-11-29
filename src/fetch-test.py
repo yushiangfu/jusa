@@ -65,8 +65,10 @@ def update_price_test(input_param, expect_url, expect_filename):
     # output
     if os.path.exists(filename):
         os.remove(filename)
-    tmp_dt = datetime(year, month, day=1) # don't mind, day won't be used
-    fetch.update_price(stock, year, month, filename)
+    res = fetch.update_price(stock, year, month, filename)
+    if res == False:
+        print('pass') # correctly handle decode error exception
+        return
 
     # expect
     if os.path.exists(expect_filename):
@@ -125,6 +127,15 @@ def update_price_tests():
     update_price_test(['8942', 2015, 11, '/tmp/8942.output'],
                       url, '/tmp/8942.expect')
 
+    # test for unknown decode error
+    url = 'http://www.tpex.org.tw/web/stock/aftertrading/daily_trading_info/st43_download.php?l=zh-tw&d=103/11&stkno=1558&s=0,asc,0'
+    update_price_test(['1558', 2014, 11, '/tmp/1558.output'],
+                      url, '/tmp/1558.expect')
+
+    # test for index
+    url = 'http://www.twse.com.tw/ch/trading/exchange/FMTQIK/FMTQIK2.php?STK_NO=&myear=2015&mmon=01&type=csv'
+    update_price_test(['index', 2015, 1, '/tmp/index.output'],
+                      url, '/tmp/index.expect')
 
 
 def need_update_index_test(filename, expect):
@@ -181,6 +192,8 @@ def str_to_dates_tests():
     # test for future case
     str_to_dates_test('2100/1/2-2100/2/1', [False])
 
+    # test for invalid date, e.g. 2015/2/31
+    str_to_dates_test('2100/2/1-2100/2/31', [False])
 
 def mg_to_ad_test(date_str, expect):
     """ test module for need_update_index() """
@@ -206,7 +219,9 @@ def fetch_price_test(stock, period, addition, column, expect):
     test module for fetch_data('stock price')
     """
     res = fetch.fetch_price(stock, period, addition)
-    if res[0] == expect[0] and list(res[1][column]) == expect[1]:
+    if res[0] == expect[0] == False:
+        print('pass')
+    elif res[0] == expect[0] == True and list(res[1][column]) == expect[1]:
         print('pass')
     else:
         print('fail')
@@ -260,6 +275,15 @@ def fetch_price_tests():
     # test for otc
     expect = [95.6, 94.0, 94.9, 98.4]
     fetch_price_test('8942', '2015/11/3-2015/11/5', 1, '收盤', [True, expect])
+
+    # test for index
+    expect = [8614.77, 8713.19, 8857.02, 8850.18]
+    fetch_price_test('index', '2015/11/3-2015/11/5', 1, '發行量加權股價指數', [True, expect])
+
+    # test for file with just header
+    fetch_price_test('4720', '2015/2/3-2015/2/5', 0, '收盤', [False])
+    fetch_price_test('3141', '2014/2/1-2014/2/5', 0, '收盤', [False])
+
 
 
 def char_to_slash_test(date_str, expect):
